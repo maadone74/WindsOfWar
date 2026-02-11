@@ -15,8 +15,6 @@ public partial class Unit : CharacterBody2D
     public int Team { get; set; } = 1;
 
     public int Health;
-    public int AttackPower;
-    public int MovementSpeed;
     public Vector2 TargetPosition;
 
     private bool _isSelected = false;
@@ -25,15 +23,19 @@ public partial class Unit : CharacterBody2D
         get => _isSelected;
         set
         {
-            _isSelected = value;
-            var sprite = GetNode<Sprite2D>("Sprite2D");
-            if (_isSelected)
+            if (_isSelected != value)
             {
-                sprite.Modulate = new Color(0, 1, 0); // Green
-            }
-            else
-            {
-                sprite.Modulate = Team == 1 ? new Color(1, 1, 1) : new Color(1, 0, 0); // White or Red
+                _isSelected = value;
+                QueueRedraw(); // Redraw selection circle/range
+                var sprite = GetNode<Sprite2D>("Sprite2D");
+                if (_isSelected)
+                {
+                    sprite.Modulate = new Color(0, 1, 0); // Green
+                }
+                else
+                {
+                    sprite.Modulate = Team == 1 ? new Color(1, 1, 1) : new Color(1, 0, 0); // White or Red
+                }
             }
         }
     }
@@ -45,8 +47,6 @@ public partial class Unit : CharacterBody2D
         if (UnitData != null)
         {
             Health = UnitData.Health;
-            AttackPower = UnitData.AttackPower;
-            MovementSpeed = UnitData.MovementSpeed;
         }
         TargetPosition = Position;
 
@@ -63,12 +63,28 @@ public partial class Unit : CharacterBody2D
         if (Position.DistanceTo(TargetPosition) > 5)
         {
             var direction = Position.DirectionTo(TargetPosition);
-            Velocity = direction * MovementSpeed;
+            Velocity = direction * UnitData.MovementSpeed;
             MoveAndSlide();
         }
         else
         {
             Velocity = Vector2.Zero;
+        }
+    }
+
+    public override void _Draw()
+    {
+        if (IsSelected)
+        {
+            // Draw Selection Circle
+            DrawCircle(Vector2.Zero, 30, new Color(0, 1, 0, 0.3f));
+
+            // Draw Range Circle if in Shooting Phase (context dependent, but for now always if selected)
+            // We can check Main phase? Or just always draw for now.
+            if (UnitData != null)
+            {
+                DrawArc(Vector2.Zero, UnitData.WeaponRange, 0, Mathf.Tau, 32, new Color(1, 0, 0, 0.5f), 2.0f);
+            }
         }
     }
 
@@ -90,11 +106,7 @@ public partial class Unit : CharacterBody2D
         }
     }
 
-    public void Attack(Unit target)
-    {
-        var damage = (int)(GD.Randi() % (AttackPower + 1));
-        target.TakeDamage(damage);
-    }
+    // Removed old Attack method, logic will be handled by Main/CombatManager
 
     private void _on_input_event(Node viewport, InputEvent @event, int shapeIdx)
     {
@@ -102,5 +114,29 @@ public partial class Unit : CharacterBody2D
         {
             EmitSignal(SignalName.Selected, this);
         }
+    }
+
+    public string GetStatsString()
+    {
+        if (UnitData == null) return "No Data";
+
+        string stats = $"Name: {UnitData.UnitName}\n";
+        stats += $"Type: {(UnitData.IsTank ? "Tank" : "Infantry")}\n";
+        stats += $"Health: {Health}/{UnitData.Health}\n";
+        stats += $"Move: {UnitData.MovementSpeed}\n";
+        stats += $"Skill: {UnitData.Skill}+\n";
+
+        if (UnitData.IsTank)
+        {
+            stats += $"Armor: F{UnitData.ArmorFront} S{UnitData.ArmorSide} T{UnitData.ArmorTop}\n";
+        }
+        else
+        {
+            stats += $"Save: {UnitData.Save}+\n";
+        }
+
+        stats += $"Weapon: Range {UnitData.WeaponRange}, ROF {UnitData.ROF}, AT {UnitData.AntiTank}, FP {UnitData.Firepower}+";
+
+        return stats;
     }
 }
