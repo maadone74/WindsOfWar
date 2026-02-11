@@ -1,0 +1,30 @@
+[gd_scene load_steps=4 format=3 uid="uid://b7v4x0vqg6w0q"]
+
+[ext_resource type="Script" path="res://scripts/Unit.cs" id="1_abcde"]
+[ext_resource type="Texture2D" uid="uid://c6y6t6j6j6j6j" path="res://icon.svg" id="2_fghij"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_12345"]
+size = Vector2(128, 128)
+
+[node name="Unit" type="CharacterBody2D"]
+script = ExtResource("1_abcde")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_fghij")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_12345")
+
+[node name="Area2D" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+shape = SubResource("RectangleShape2D_12345")
+
+[node name="HealthBar" type="ProgressBar" parent="."]
+offset_left = -50.0
+offset_top = -80.0
+offset_right = 50.0
+offset_bottom = -60.0
+show_percentage = false
+
+[connection signal="input_event" from="Area2D" to="." method="_on_input_event"]
