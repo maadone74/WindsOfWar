@@ -1,12 +1,14 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
+using System.Collections.Generic;
 
 namespace WindsOfWar
 {
     public class Unit
     {
         public event Action? Died;
+        public event Action<string>? OnSoundTriggered;
 
         public UnitData UnitData { get; set; }
         public int Team { get; set; } = 1;
@@ -16,7 +18,7 @@ namespace WindsOfWar
         public Vector2 TargetPosition { get; set; }
         public bool IsSelected { get; set; }
         public bool HasMoved { get; set; }
-        public bool HasShot { get; set; }
+        public HashSet<int> FiredWeaponIndices { get; set; } = new HashSet<int>();
         public int SelectedWeaponIndex { get; set; } = 0;
 
         public Weapon? SelectedWeapon
@@ -121,20 +123,29 @@ namespace WindsOfWar
              return Vector2.Distance(Position, newPosition) <= UnitData.MovementDistance;
         }
 
+        public void ResetTurn()
+        {
+            HasMoved = false;
+            FiredWeaponIndices.Clear();
+        }
+
         public void MoveTo(Vector2 newPosition)
         {
             if (!HasMoved && CanMoveTo(newPosition))
             {
                 TargetPosition = newPosition;
                 HasMoved = true;
+                OnSoundTriggered?.Invoke("move");
             }
         }
 
-        public string ResolveShooting(Unit target)
+        public string ResolveShooting(Unit target, List<Terrain> terrainList)
         {
             if (Health <= 0) return "Unit is dead.";
             if (target.Health <= 0) return "Target is already dead.";
-            if (HasShot) return "Already fired this turn!";
+
+            if (FiredWeaponIndices.Contains(SelectedWeaponIndex))
+                return "This weapon already fired this turn!";
 
             Weapon? weapon = SelectedWeapon;
             if (weapon == null) return "No Weapon!";
@@ -145,17 +156,33 @@ namespace WindsOfWar
             int rof = HasMoved ? weapon.MovingROF : weapon.HaltedROF;
             if (rof <= 0) return "No ROF!";
 
+            // Check Concealment
+            bool concealed = false;
+            foreach (var t in terrainList)
+            {
+                if ((t.Type == TerrainType.Forest || t.Type == TerrainType.Building) && t.Bounds.Contains(target.Position))
+                {
+                    concealed = true;
+                    break;
+                }
+            }
+
             Random rand = new Random();
             int hits = 0;
             string log = "";
+            if (concealed) log += "(Concealed +1 to Hit) ";
 
             // Mark as shot
-            HasShot = true;
+            FiredWeaponIndices.Add(SelectedWeaponIndex);
+            OnSoundTriggered?.Invoke("shoot");
+
+            int toHit = UnitData.Skill;
+            if (concealed) toHit++;
 
             for(int i=0; i<rof; i++)
             {
                 int roll = rand.Next(1, 7);
-                if (roll >= UnitData.Skill) hits++;
+                if (roll >= toHit) hits++;
             }
 
             if (hits == 0) return "Miss!";

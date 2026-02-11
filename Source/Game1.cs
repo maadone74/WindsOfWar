@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Audio;
 using System.Collections.Generic;
 
 namespace WindsOfWar
@@ -10,6 +11,8 @@ namespace WindsOfWar
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch = null!;
         private Texture2D _whiteTexture = null!;
+        private Dictionary<string, SoundEffect> _sounds = new Dictionary<string, SoundEffect>();
+        private List<Terrain> _terrainList = new List<Terrain>();
 
         public enum TurnState
         {
@@ -22,10 +25,15 @@ namespace WindsOfWar
         public enum GameState
         {
             SplashScreen,
+            ScenarioSelect,
+            ForceSetup,
             Gameplay
         }
 
         private GameState _currentGameState = GameState.SplashScreen;
+        private List<Scenario> _scenarios = new List<Scenario>();
+        private Scenario? _selectedScenario;
+        private List<UnitData> _availableUnits = new List<UnitData>();
         private int _playerSide = 1; // 1 = Americans, 2 = Germans
         private Rectangle _startGameButtonRect = new Rectangle(362, 300, 300, 50);
         private Rectangle _toggleSideButtonRect = new Rectangle(362, 360, 300, 50);
@@ -33,6 +41,7 @@ namespace WindsOfWar
         private List<Unit> _units = new List<Unit>();
         private Unit? _selectedUnit;
         private int _currentTurn = 1;
+        private int _gameTurnNumber = 1;
         private TurnState _currentPhase = TurnState.Starting;
 
         private Rectangle _nextPhaseButtonRect = new Rectangle(10, 10, 150, 40);
@@ -54,75 +63,52 @@ namespace WindsOfWar
         protected override void Initialize()
         {
             base.Initialize();
+
+            // Initialize Scenarios
+            var s1 = new Scenario("Open Field", new Rectangle(50, 50, 900, 150), new Rectangle(50, 550, 900, 150));
+            s1.TerrainList.Add(new Terrain(new Rectangle(400, 300, 100, 100), TerrainType.Forest));
+            s1.TerrainList.Add(new Terrain(new Rectangle(600, 100, 50, 50), TerrainType.Building));
+            _scenarios.Add(s1);
+
+            var s2 = new Scenario("River Crossing", new Rectangle(50, 50, 900, 100), new Rectangle(50, 600, 900, 100));
+            s2.TerrainList.Add(new Terrain(new Rectangle(0, 350, 1024, 60), TerrainType.River));
+            s2.TerrainList.Add(new Terrain(new Rectangle(100, 450, 80, 80), TerrainType.Forest));
+            s2.TerrainList.Add(new Terrain(new Rectangle(800, 200, 80, 80), TerrainType.Forest));
+            _scenarios.Add(s2);
+
+            _availableUnits = UnitLibrary.GetAllUnits();
         }
 
-        private void StartGame()
+        private void GoToScenarioSelect()
         {
-            _units.Clear();
+            _currentGameState = GameState.ScenarioSelect;
+        }
+
+        private void SelectScenario(Scenario scenario)
+        {
+            _selectedScenario = scenario;
+            _terrainList = new List<Terrain>(scenario.TerrainList);
+            _units.Clear(); // Clear units for setup
+            _currentGameState = GameState.ForceSetup;
+        }
+
+        private void AddUnit(UnitData data, int team)
+        {
+            // Find a spot in deployment zone
+            Rectangle zone = (team == 1) ? _selectedScenario.P1Deployment : _selectedScenario.P2Deployment;
+            Random rand = new Random();
+            int x = rand.Next(zone.X, zone.X + zone.Width);
+            int y = rand.Next(zone.Y, zone.Y + zone.Height);
+            SpawnUnit(data, team, new Vector2(x, y));
+        }
+
+        private void StartGameplay()
+        {
             _currentTurn = 1;
+            _gameTurnNumber = 1;
             _currentPhase = TurnState.Starting;
-            _combatLog = "Welcome to WindsOfWar!";
+            _combatLog = "Battle Started!";
             _selectedUnit = null;
-
-            // Spawn initial units
-            var riflemanData = new UnitData
-            {
-                Name = "Rifle Team",
-                Type = UnitType.Infantry,
-                Health = 1,
-                MovementDistance = 150,
-                Skill = 4,
-                Save = 3,
-                Weapons = new List<Weapon>
-                {
-                    new Weapon { Name = "Rifle", Range = 400, HaltedROF = 1, MovingROF = 1, AntiTank = 0, Firepower = 6 }
-                }
-            };
-
-            var shermanData = new UnitData
-            {
-                Name = "Sherman",
-                Type = UnitType.Tank,
-                Health = 1,
-                MovementDistance = 250,
-                Skill = 4,
-                Save = 3,
-                FrontArmor = 6,
-                SideArmor = 4,
-                Weapons = new List<Weapon>
-                {
-                    new Weapon { Name = "75mm Gun", Range = 600, HaltedROF = 2, MovingROF = 1, AntiTank = 10, Firepower = 3 },
-                    new Weapon { Name = ".50 cal MG", Range = 400, HaltedROF = 3, MovingROF = 1, AntiTank = 2, Firepower = 6 }
-                }
-            };
-
-            var panzerData = new UnitData
-            {
-                Name = "Panzer IV",
-                Type = UnitType.Tank,
-                Health = 1,
-                MovementDistance = 250,
-                Skill = 4,
-                Save = 3,
-                FrontArmor = 6,
-                SideArmor = 3,
-                Weapons = new List<Weapon>
-                {
-                    new Weapon { Name = "7.5cm Gun", Range = 800, HaltedROF = 2, MovingROF = 1, AntiTank = 11, Firepower = 3 },
-                    new Weapon { Name = "MG", Range = 400, HaltedROF = 3, MovingROF = 1, AntiTank = 2, Firepower = 6 }
-                }
-            };
-
-            // Team 1 (Allies)
-            SpawnUnit(riflemanData, 1, new Vector2(100, 100));
-            SpawnUnit(riflemanData, 1, new Vector2(100, 250));
-            SpawnUnit(shermanData, 1, new Vector2(200, 175));
-
-            // Team 2 (Axis)
-            SpawnUnit(riflemanData, 2, new Vector2(900, 100));
-            SpawnUnit(riflemanData, 2, new Vector2(900, 250));
-            SpawnUnit(panzerData, 2, new Vector2(800, 175));
-
             _currentGameState = GameState.Gameplay;
         }
 
@@ -136,12 +122,33 @@ namespace WindsOfWar
 
             // Initialize Font
             SimpleFont.Initialize();
+
+            // Load Sounds
+            try
+            {
+                _sounds["shoot"] = Content.Load<SoundEffect>("shoot");
+                _sounds["move"] = Content.Load<SoundEffect>("move");
+            }
+            catch
+            {
+                // Sounds missing, ignore
+                System.Diagnostics.Debug.WriteLine("Warning: Sound files missing.");
+            }
+        }
+
+        public void PlaySound(string name)
+        {
+            if (_sounds.TryGetValue(name, out var sound))
+            {
+                sound.Play();
+            }
         }
 
         private void SpawnUnit(UnitData data, int team, Vector2 position)
         {
             var unit = new Unit(data, team, position);
             unit.Died += () => OnUnitDied(unit);
+            unit.OnSoundTriggered += PlaySound;
             _units.Add(unit);
         }
 
@@ -177,12 +184,59 @@ namespace WindsOfWar
                     Point mousePos = mouseState.Position;
                     if (_startGameButtonRect.Contains(mousePos))
                     {
-                        StartGame();
+                        GoToScenarioSelect();
                     }
                     else if (_toggleSideButtonRect.Contains(mousePos))
                     {
                         _playerSide = (_playerSide == 1) ? 2 : 1;
                     }
+                }
+            }
+            else if (_currentGameState == GameState.ScenarioSelect)
+            {
+                if (mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
+                {
+                    Point mousePos = mouseState.Position;
+                    int y = 150;
+                    foreach(var s in _scenarios)
+                    {
+                         Rectangle btn = new Rectangle(300, y, 400, 40);
+                         if (btn.Contains(mousePos))
+                         {
+                             SelectScenario(s);
+                             break;
+                         }
+                         y += 60;
+                    }
+                }
+            }
+            else if (_currentGameState == GameState.ForceSetup)
+            {
+                 if (mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
+                {
+                    Point mousePos = mouseState.Position;
+
+                    // P1 Buttons (Left)
+                    int y = 100;
+                    foreach(var u in _availableUnits)
+                    {
+                        Rectangle btn = new Rectangle(20, y, 200, 30);
+                        if (btn.Contains(mousePos)) AddUnit(u, 1);
+                        y += 40;
+                    }
+
+                    // P2 Buttons (Right)
+                    y = 100;
+                    foreach(var u in _availableUnits)
+                    {
+                        Rectangle btn = new Rectangle(800, y, 200, 30);
+                        if (btn.Contains(mousePos)) AddUnit(u, 2);
+                        y += 40;
+                    }
+
+                    // Start Game Button
+                    Rectangle startBtn = new Rectangle(400, 600, 200, 50);
+                    if (startBtn.Contains(mousePos)) StartGameplay();
                 }
             }
             else
@@ -262,7 +316,7 @@ namespace WindsOfWar
                 {
                     if (_selectedUnit.Team == _currentTurn)
                     {
-                        _combatLog = _selectedUnit.ResolveShooting(unit);
+                        _combatLog = _selectedUnit.ResolveShooting(unit, _terrainList);
                     }
                 }
             }
@@ -286,13 +340,14 @@ namespace WindsOfWar
                 _currentPhase = TurnState.Starting;
                 _currentTurn = _currentTurn == 1 ? 2 : 1;
 
+                if (_currentTurn == 1) _gameTurnNumber++;
+
                 // Reset Movement Flags for the new turn's active team
                 foreach (var unit in _units)
                 {
                     if (unit.Team == _currentTurn)
                     {
-                        unit.HasMoved = false;
-                        unit.HasShot = false;
+                        unit.ResetTurn();
                     }
                 }
 
@@ -334,8 +389,70 @@ namespace WindsOfWar
                 string sideText = _playerSide == 1 ? "SIDE: AMERICANS" : "SIDE: GERMANS";
                 SimpleFont.DrawString(_spriteBatch, _whiteTexture, sideText, new Vector2(_toggleSideButtonRect.X + 20, _toggleSideButtonRect.Y + 15), Color.White, 3);
             }
+            else if (_currentGameState == GameState.ScenarioSelect)
+            {
+                SimpleFont.DrawString(_spriteBatch, _whiteTexture, "SELECT SCENARIO", new Vector2(300, 50), Color.White, 5);
+                int y = 150;
+                foreach(var s in _scenarios)
+                {
+                     Rectangle btn = new Rectangle(300, y, 400, 40);
+                     _spriteBatch.Draw(_whiteTexture, btn, Color.DarkGray);
+                     SimpleFont.DrawString(_spriteBatch, _whiteTexture, s.Name, new Vector2(320, y+10), Color.White, 2);
+                     y += 60;
+                }
+            }
+            else if (_currentGameState == GameState.ForceSetup)
+            {
+                SimpleFont.DrawString(_spriteBatch, _whiteTexture, "SETUP FORCES", new Vector2(400, 20), Color.White, 3);
+
+                // Draw Zones (Debug/Visual)
+                if (_selectedScenario != null)
+                {
+                    _spriteBatch.Draw(_whiteTexture, _selectedScenario.P1Deployment, Color.Green * 0.3f);
+                    _spriteBatch.Draw(_whiteTexture, _selectedScenario.P2Deployment, Color.Red * 0.3f);
+                }
+
+                // Draw P1 Buttons
+                int y = 100;
+                SimpleFont.DrawString(_spriteBatch, _whiteTexture, "Player 1 (USA)", new Vector2(20, 70), Color.CornflowerBlue, 2);
+                foreach(var u in _availableUnits)
+                {
+                    Rectangle btn = new Rectangle(20, y, 200, 30);
+                    _spriteBatch.Draw(_whiteTexture, btn, Color.DarkBlue);
+                    SimpleFont.DrawString(_spriteBatch, _whiteTexture, u.Name, new Vector2(25, y+5), Color.White, 1);
+                    y += 40;
+                }
+
+                // Draw P2 Buttons
+                y = 100;
+                SimpleFont.DrawString(_spriteBatch, _whiteTexture, "Player 2 (GER)", new Vector2(800, 70), Color.IndianRed, 2);
+                foreach(var u in _availableUnits)
+                {
+                    Rectangle btn = new Rectangle(800, y, 200, 30);
+                    _spriteBatch.Draw(_whiteTexture, btn, Color.DarkRed);
+                    SimpleFont.DrawString(_spriteBatch, _whiteTexture, u.Name, new Vector2(805, y+5), Color.White, 1);
+                    y += 40;
+                }
+
+                // Draw Units (so we can see them placed)
+                foreach (var unit in _units)
+                {
+                    unit.Draw(_spriteBatch, _whiteTexture);
+                }
+
+                // Start Button
+                Rectangle startBtn = new Rectangle(400, 600, 200, 50);
+                _spriteBatch.Draw(_whiteTexture, startBtn, Color.Green);
+                SimpleFont.DrawString(_spriteBatch, _whiteTexture, "START BATTLE", new Vector2(420, 615), Color.White, 2);
+            }
             else
             {
+                // Draw Terrain
+                foreach (var terrain in _terrainList)
+                {
+                    _spriteBatch.Draw(_whiteTexture, terrain.Bounds, terrain.Color);
+                }
+
                 // Draw Units
                 foreach (var unit in _units)
                 {
@@ -351,7 +468,7 @@ namespace WindsOfWar
                 SimpleFont.DrawString(_spriteBatch, _whiteTexture, "NEXT PHASE", new Vector2(_nextPhaseButtonRect.X + 10, _nextPhaseButtonRect.Y + 10), Color.White, 2);
 
                 // Draw Turn Info
-                string turnInfo = $"P{_currentTurn} : {_currentPhase}";
+                string turnInfo = $"Turn {_gameTurnNumber} | P{_currentTurn} : {_currentPhase}";
                 SimpleFont.DrawString(_spriteBatch, _whiteTexture, turnInfo, new Vector2(180, 15), Color.White, 3);
 
                 // Draw Selected Unit Info
@@ -373,8 +490,8 @@ namespace WindsOfWar
                         SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(Right Click to Move)", new Vector2(10, 90), Color.LightGreen, 2);
 
                     // Shot status and Weapon Hint
-                    if (_selectedUnit.HasShot)
-                        SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(SHOT)", new Vector2(10, 110), Color.Red, 2);
+                    if (_selectedUnit.FiredWeaponIndices.Contains(_selectedUnit.SelectedWeaponIndex))
+                        SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(WEAPON FIRED)", new Vector2(10, 110), Color.Red, 2);
                     else if (_selectedUnit.Team == _currentTurn)
                         SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(Press W to Cycle Weapon)", new Vector2(10, 110), Color.LightGray, 2);
                 }
