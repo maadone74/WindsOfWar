@@ -83,10 +83,21 @@ public partial class Main : Node2D
         {
             if (mouseButtonEvent.ButtonIndex == MouseButton.Left && mouseButtonEvent.Pressed)
             {
-                if (_selectedUnit != null && GetNodeOrNull<Unit>(GetPathTo(GetNodeAt(mouseButtonEvent.Position))) == null)
+                var spaceState = GetWorld2D().DirectSpaceState;
+                var query = new PhysicsPointQueryParameters2D();
+                query.Position = GetGlobalMousePosition();
+                query.CollideWithAreas = true;
+                query.CollideWithBodies = true;
+
+                var result = spaceState.IntersectPoint(query);
+
+                if (result.Count == 0)
                 {
-                    _selectedUnit.IsSelected = false;
-                    _selectedUnit = null;
+                    if (_selectedUnit != null)
+                    {
+                        _selectedUnit.IsSelected = false;
+                        _selectedUnit = null;
+                    }
                 }
             }
             else if (mouseButtonEvent.ButtonIndex == MouseButton.Right && mouseButtonEvent.Pressed)
