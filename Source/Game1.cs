@@ -27,12 +27,16 @@ namespace WindsOfWar
         private Rectangle _nextPhaseButtonRect = new Rectangle(10, 10, 150, 40);
         private MouseState _previousMouseState;
 
+        private string _combatLog = "Welcome to WindsOfWar!";
+
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
             Window.AllowUserResizing = true;
+            _graphics.PreferredBackBufferWidth = 1024;
+            _graphics.PreferredBackBufferHeight = 768;
         }
 
         protected override void Initialize()
@@ -40,16 +44,33 @@ namespace WindsOfWar
             base.Initialize();
 
             // Spawn initial units
-            var riflemanData = new UnitData { Health = 50, AttackPower = 5, MovementSpeed = 250 };
-            var tankData = new UnitData { Health = 200, AttackPower = 20, MovementSpeed = 150 };
+            var riflemanData = new UnitData {
+                Name = "Rifle Team", Type = UnitType.Infantry, Health = 1,
+                MovementDistance = 150, Range = 400, HaltedROF = 1, MovingROF = 1,
+                AntiTank = 0, Firepower = 6, Skill = 4, Save = 3
+            };
 
+            var shermanData = new UnitData {
+                Name = "Sherman", Type = UnitType.Tank, Health = 1,
+                MovementDistance = 250, Range = 600, HaltedROF = 2, MovingROF = 1,
+                AntiTank = 10, Firepower = 3, Skill = 4, Save = 3, FrontArmor = 6, SideArmor = 4
+            };
+
+            var panzerData = new UnitData {
+                Name = "Panzer IV", Type = UnitType.Tank, Health = 1,
+                MovementDistance = 250, Range = 800, HaltedROF = 2, MovingROF = 1,
+                AntiTank = 11, Firepower = 3, Skill = 4, Save = 3, FrontArmor = 6, SideArmor = 3
+            };
+
+            // Team 1 (Allies)
             SpawnUnit(riflemanData, 1, new Vector2(100, 100));
             SpawnUnit(riflemanData, 1, new Vector2(100, 250));
-            SpawnUnit(tankData, 1, new Vector2(200, 175));
+            SpawnUnit(shermanData, 1, new Vector2(200, 175));
 
+            // Team 2 (Axis)
             SpawnUnit(riflemanData, 2, new Vector2(900, 100));
             SpawnUnit(riflemanData, 2, new Vector2(900, 250));
-            SpawnUnit(tankData, 2, new Vector2(800, 175));
+            SpawnUnit(panzerData, 2, new Vector2(800, 175));
         }
 
         protected override void LoadContent()
@@ -59,6 +80,9 @@ namespace WindsOfWar
             // Create a 1x1 white texture
             _whiteTexture = new Texture2D(GraphicsDevice, 1, 1);
             _whiteTexture.SetData(new[] { Color.White });
+
+            // Initialize Font
+            SimpleFont.Initialize();
         }
 
         private void SpawnUnit(UnitData data, int team, Vector2 position)
@@ -96,7 +120,6 @@ namespace WindsOfWar
             _previousMouseState = mouseState;
 
             // Update Units
-            // Create a copy to iterate safely
             var unitsToUpdate = new List<Unit>(_units);
             foreach (var unit in unitsToUpdate)
             {
@@ -107,9 +130,6 @@ namespace WindsOfWar
                 }
                 unit.Update(gameTime);
             }
-
-            // Update Window Title
-            Window.Title = $"WindsOfWar - Player {_currentTurn}'s Turn - {_currentPhase} Phase";
 
             base.Update(gameTime);
         }
@@ -137,6 +157,8 @@ namespace WindsOfWar
 
             if (!clickedUnit && _selectedUnit != null)
             {
+                // Deselect only if clicking empty space and not targeting
+                // Actually, let's keep it simple: click empty space -> deselect
                 _selectedUnit.IsSelected = false;
                 _selectedUnit = null;
             }
@@ -154,13 +176,18 @@ namespace WindsOfWar
         {
             if (_selectedUnit != null && _selectedUnit.Team != unit.Team)
             {
-                if (_currentPhase == TurnState.Shooting || _currentPhase == TurnState.Assault)
+                // Targeting Enemy
+                if (_currentPhase == TurnState.Shooting)
                 {
-                    _selectedUnit.Attack(unit);
+                    if (_selectedUnit.Team == _currentTurn)
+                    {
+                        _combatLog = _selectedUnit.ResolveShooting(unit);
+                    }
                 }
             }
             else if (unit.Team == _currentTurn)
             {
+                // Selecting Own Unit
                 if (_selectedUnit != null && _selectedUnit != unit)
                 {
                     _selectedUnit.IsSelected = false;
@@ -177,6 +204,16 @@ namespace WindsOfWar
             {
                 _currentPhase = TurnState.Starting;
                 _currentTurn = _currentTurn == 1 ? 2 : 1;
+
+                // Reset Movement Flags for the new turn's active team
+                foreach (var unit in _units)
+                {
+                    if (unit.Team == _currentTurn)
+                        unit.HasMoved = false;
+                }
+
+                // Automatically skip Starting Phase to Movement? Or keep it for rally/remount
+                // Let's keep it.
             }
 
             if (_selectedUnit != null)
@@ -198,8 +235,33 @@ namespace WindsOfWar
                 unit.Draw(_spriteBatch, _whiteTexture);
             }
 
-            // Draw UI Button
+            // Draw UI Panel
+            Rectangle uiRect = new Rectangle(0, 0, GraphicsDevice.Viewport.Width, 60);
+            _spriteBatch.Draw(_whiteTexture, uiRect, Color.Black * 0.7f);
+
+            // Draw Phase Button
             _spriteBatch.Draw(_whiteTexture, _nextPhaseButtonRect, Color.DarkGray);
+            SimpleFont.DrawString(_spriteBatch, _whiteTexture, "NEXT PHASE", new Vector2(_nextPhaseButtonRect.X + 10, _nextPhaseButtonRect.Y + 10), Color.White, 2);
+
+            // Draw Turn Info
+            string turnInfo = $"P{_currentTurn} : {_currentPhase}";
+            SimpleFont.DrawString(_spriteBatch, _whiteTexture, turnInfo, new Vector2(180, 15), Color.White, 3);
+
+            // Draw Selected Unit Info
+            if (_selectedUnit != null)
+            {
+                string info = $"{_selectedUnit.UnitData.Name} | Move: {_selectedUnit.UnitData.MovementDistance} | Range: {_selectedUnit.UnitData.Range} | AT: {_selectedUnit.UnitData.AntiTank} | FP: {_selectedUnit.UnitData.Firepower}+";
+                SimpleFont.DrawString(_spriteBatch, _whiteTexture, info, new Vector2(10, 70), Color.White, 2);
+
+                // Debug Moved status
+                if (_selectedUnit.HasMoved)
+                     SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(MOVED)", new Vector2(10, 90), Color.Yellow, 2);
+                else if (_currentPhase == TurnState.Movement && _selectedUnit.Team == _currentTurn)
+                     SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(Right Click to Move)", new Vector2(10, 90), Color.LightGreen, 2);
+            }
+
+            // Draw Combat Log
+            SimpleFont.DrawString(_spriteBatch, _whiteTexture, _combatLog, new Vector2(10, GraphicsDevice.Viewport.Height - 30), Color.Yellow, 2);
 
             _spriteBatch.End();
 
