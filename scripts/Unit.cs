@@ -92,7 +92,7 @@ public partial class Unit : CharacterBody2D
 
     public void Attack(Unit target)
     {
-        var damage = GD.RandiRange(0, AttackPower);
+        var damage = (int)(GD.Randi() % (AttackPower + 1));
         target.TakeDamage(damage);
     }
 
