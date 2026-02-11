@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace WindsOfWar
 {
     public enum UnitType
@@ -17,11 +19,7 @@ namespace WindsOfWar
         public int MovementDistance { get; set; } = 150; // Pixels per turn
 
         // Shooting
-        public int Range { get; set; } = 400;
-        public int HaltedROF { get; set; } = 1;
-        public int MovingROF { get; set; } = 1;
-        public int AntiTank { get; set; } = 0; // 0 means no AT (bullet)
-        public int Firepower { get; set; } = 6; // 1+ (best) to 6+ (worst)
+        public List<Weapon> Weapons { get; set; } = new List<Weapon>();
 
         // Defense
         public int Skill { get; set; } = 4; // 4+ To Hit (Trained)

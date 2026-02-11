@@ -16,6 +16,26 @@ namespace WindsOfWar
         public Vector2 TargetPosition { get; set; }
         public bool IsSelected { get; set; }
         public bool HasMoved { get; set; }
+        public bool HasShot { get; set; }
+        public int SelectedWeaponIndex { get; set; } = 0;
+
+        public Weapon? SelectedWeapon
+        {
+            get
+            {
+                if (UnitData.Weapons == null || UnitData.Weapons.Count == 0) return null;
+                if (SelectedWeaponIndex < 0 || SelectedWeaponIndex >= UnitData.Weapons.Count) SelectedWeaponIndex = 0;
+                return UnitData.Weapons[SelectedWeaponIndex];
+            }
+        }
+
+        public void CycleWeapon()
+        {
+            if (UnitData.Weapons == null || UnitData.Weapons.Count == 0) return;
+            SelectedWeaponIndex++;
+            if (SelectedWeaponIndex >= UnitData.Weapons.Count)
+                SelectedWeaponIndex = 0;
+        }
 
         public Rectangle Bounds => new Rectangle((int)Position.X - 16, (int)Position.Y - 16, 32, 32);
 
@@ -114,16 +134,23 @@ namespace WindsOfWar
         {
             if (Health <= 0) return "Unit is dead.";
             if (target.Health <= 0) return "Target is already dead.";
+            if (HasShot) return "Already fired this turn!";
+
+            Weapon? weapon = SelectedWeapon;
+            if (weapon == null) return "No Weapon!";
 
             float dist = Vector2.Distance(Position, target.Position);
-            if (dist > UnitData.Range) return "Out of Range!";
+            if (dist > weapon.Range) return "Out of Range!";
 
-            int rof = HasMoved ? UnitData.MovingROF : UnitData.HaltedROF;
+            int rof = HasMoved ? weapon.MovingROF : weapon.HaltedROF;
             if (rof <= 0) return "No ROF!";
 
             Random rand = new Random();
             int hits = 0;
             string log = "";
+
+            // Mark as shot
+            HasShot = true;
 
             for(int i=0; i<rof; i++)
             {
@@ -143,21 +170,21 @@ namespace WindsOfWar
 
                 if (target.UnitData.Type == UnitType.Tank)
                 {
-                    if (UnitData.AntiTank == 0)
+                    if (weapon.AntiTank == 0)
                     {
                         log += "Bounce. ";
                     }
                     else
                     {
                         // Tank vs Tank Combat (Equation of War)
-                        int atRoll = rand.Next(1, 7) + UnitData.AntiTank;
+                        int atRoll = rand.Next(1, 7) + weapon.AntiTank;
                         int armorRoll = rand.Next(1, 7) + target.UnitData.FrontArmor; // Simplified to Front Armor
 
                         if (atRoll > armorRoll)
                         {
                             // Penetrated
                             int fpRoll = rand.Next(1, 7);
-                            if (fpRoll >= UnitData.Firepower)
+                            if (fpRoll >= weapon.Firepower)
                             {
                                 destroyed = true;
                                 log += "Penetrated! Destroyed! ";

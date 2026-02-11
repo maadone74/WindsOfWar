@@ -37,6 +37,7 @@ namespace WindsOfWar
 
         private Rectangle _nextPhaseButtonRect = new Rectangle(10, 10, 150, 40);
         private MouseState _previousMouseState;
+        private KeyboardState _previousKeyboardState;
 
         private string _combatLog = "Welcome to WindsOfWar!";
 
@@ -70,13 +71,12 @@ namespace WindsOfWar
                 Type = UnitType.Infantry,
                 Health = 1,
                 MovementDistance = 150,
-                Range = 400,
-                HaltedROF = 1,
-                MovingROF = 1,
-                AntiTank = 0,
-                Firepower = 6,
                 Skill = 4,
-                Save = 3
+                Save = 3,
+                Weapons = new List<Weapon>
+                {
+                    new Weapon { Name = "Rifle", Range = 400, HaltedROF = 1, MovingROF = 1, AntiTank = 0, Firepower = 6 }
+                }
             };
 
             var shermanData = new UnitData
@@ -85,15 +85,15 @@ namespace WindsOfWar
                 Type = UnitType.Tank,
                 Health = 1,
                 MovementDistance = 250,
-                Range = 600,
-                HaltedROF = 2,
-                MovingROF = 1,
-                AntiTank = 10,
-                Firepower = 3,
                 Skill = 4,
                 Save = 3,
                 FrontArmor = 6,
-                SideArmor = 4
+                SideArmor = 4,
+                Weapons = new List<Weapon>
+                {
+                    new Weapon { Name = "75mm Gun", Range = 600, HaltedROF = 2, MovingROF = 1, AntiTank = 10, Firepower = 3 },
+                    new Weapon { Name = ".50 cal MG", Range = 400, HaltedROF = 3, MovingROF = 1, AntiTank = 2, Firepower = 6 }
+                }
             };
 
             var panzerData = new UnitData
@@ -102,15 +102,15 @@ namespace WindsOfWar
                 Type = UnitType.Tank,
                 Health = 1,
                 MovementDistance = 250,
-                Range = 800,
-                HaltedROF = 2,
-                MovingROF = 1,
-                AntiTank = 11,
-                Firepower = 3,
                 Skill = 4,
                 Save = 3,
                 FrontArmor = 6,
-                SideArmor = 3
+                SideArmor = 3,
+                Weapons = new List<Weapon>
+                {
+                    new Weapon { Name = "7.5cm Gun", Range = 800, HaltedROF = 2, MovingROF = 1, AntiTank = 11, Firepower = 3 },
+                    new Weapon { Name = "MG", Range = 400, HaltedROF = 3, MovingROF = 1, AntiTank = 2, Firepower = 6 }
+                }
             };
 
             // Team 1 (Allies)
@@ -160,6 +160,15 @@ namespace WindsOfWar
 
             // Handle Input
             var mouseState = Mouse.GetState();
+            var keyboardState = Keyboard.GetState();
+
+            if (_selectedUnit != null && _selectedUnit.Team == _currentTurn)
+            {
+                if (keyboardState.IsKeyDown(Keys.W) && _previousKeyboardState.IsKeyUp(Keys.W))
+                {
+                    _selectedUnit.CycleWeapon();
+                }
+            }
 
             if (_currentGameState == GameState.SplashScreen)
             {
@@ -201,6 +210,7 @@ namespace WindsOfWar
             }
 
             _previousMouseState = mouseState;
+            _previousKeyboardState = keyboardState;
 
             base.Update(gameTime);
         }
@@ -280,7 +290,10 @@ namespace WindsOfWar
                 foreach (var unit in _units)
                 {
                     if (unit.Team == _currentTurn)
+                    {
                         unit.HasMoved = false;
+                        unit.HasShot = false;
+                    }
                 }
 
                 // Automatically skip Starting Phase to Movement? Or keep it for rally/remount
@@ -344,7 +357,13 @@ namespace WindsOfWar
                 // Draw Selected Unit Info
                 if (_selectedUnit != null)
                 {
-                    string info = $"{_selectedUnit.UnitData.Name} | Move: {_selectedUnit.UnitData.MovementDistance} | Range: {_selectedUnit.UnitData.Range} | AT: {_selectedUnit.UnitData.AntiTank} | FP: {_selectedUnit.UnitData.Firepower}+";
+                    string info = $"{_selectedUnit.UnitData.Name} | Move: {_selectedUnit.UnitData.MovementDistance}";
+                    Weapon? weapon = _selectedUnit.SelectedWeapon;
+                    if (weapon != null)
+                    {
+                        info += $" | WPN: {weapon.Name} | Rng: {weapon.Range} | AT: {weapon.AntiTank} | FP: {weapon.Firepower}+";
+                    }
+
                     SimpleFont.DrawString(_spriteBatch, _whiteTexture, info, new Vector2(10, 70), Color.White, 2);
 
                     // Debug Moved status
@@ -352,6 +371,12 @@ namespace WindsOfWar
                         SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(MOVED)", new Vector2(10, 90), Color.Yellow, 2);
                     else if (_currentPhase == TurnState.Movement && _selectedUnit.Team == _currentTurn)
                         SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(Right Click to Move)", new Vector2(10, 90), Color.LightGreen, 2);
+
+                    // Shot status and Weapon Hint
+                    if (_selectedUnit.HasShot)
+                        SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(SHOT)", new Vector2(10, 110), Color.Red, 2);
+                    else if (_selectedUnit.Team == _currentTurn)
+                        SimpleFont.DrawString(_spriteBatch, _whiteTexture, "(Press W to Cycle Weapon)", new Vector2(10, 110), Color.LightGray, 2);
                 }
 
                 // Draw Combat Log
