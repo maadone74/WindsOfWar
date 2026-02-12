@@ -402,6 +402,12 @@ namespace WindsOfWar
                 {
                     _selectedUnit.IsSelected = false;
                 }
+
+                if (_selectedUnit != unit)
+                {
+                    _combatLog = "";
+                }
+
                 _selectedUnit = unit;
                 _selectedUnit.IsSelected = true;
             }
@@ -409,6 +415,7 @@ namespace WindsOfWar
 
         private void AdvancePhase()
         {
+            _combatLog = "";
             _currentPhase++;
             if (_currentPhase > TurnState.Assault)
             {
