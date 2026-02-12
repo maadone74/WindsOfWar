@@ -125,23 +125,79 @@ namespace WindsOfWar
             // Load Sounds
             try
             {
-                _sounds["shoot"] = Content.Load<SoundEffect>("tank-shoot");
-                _sounds["move"] = Content.Load<SoundEffect>("tank-move");
+                System.Diagnostics.Debug.WriteLine("Loading sounds from files...");
+                
+                string shootPath = "Content/tank-shoot.wav";
+                string movePath = "Content/tank-move.wav";
+                
+                System.Diagnostics.Debug.WriteLine($"  Current directory: {Directory.GetCurrentDirectory()}");
+                System.Diagnostics.Debug.WriteLine($"  Looking for: {Path.GetFullPath(shootPath)}");
+                System.Diagnostics.Debug.WriteLine($"  File exists: {File.Exists(shootPath)}");
+                System.Diagnostics.Debug.WriteLine($"  Looking for: {Path.GetFullPath(movePath)}");
+                System.Diagnostics.Debug.WriteLine($"  File exists: {File.Exists(movePath)}");
+                
+                if (File.Exists(shootPath))
+                {
+                    byte[] shootData = File.ReadAllBytes(shootPath);
+                    System.Diagnostics.Debug.WriteLine($"  Read {shootData.Length} bytes from tank-shoot.wav");
+                    
+                    using (var stream = new MemoryStream(shootData))
+                    {
+                        _sounds["shoot"] = SoundEffect.FromStream(stream);
+                        System.Diagnostics.Debug.WriteLine("  Loaded: tank-shoot.wav");
+                    }
+                }
+                
+                if (File.Exists(movePath))
+                {
+                    byte[] moveData = File.ReadAllBytes(movePath);
+                    System.Diagnostics.Debug.WriteLine($"  Read {moveData.Length} bytes from tank-move.wav");
+                    
+                    using (var stream = new MemoryStream(moveData))
+                    {
+                        _sounds["move"] = SoundEffect.FromStream(stream);
+                        System.Diagnostics.Debug.WriteLine("  Loaded: tank-move.wav");
+                    }
+                }
+                
+                if (_sounds.Count > 0)
+                    System.Diagnostics.Debug.WriteLine($"Sounds loaded successfully! Total: {_sounds.Count}");
+                else
+                    throw new Exception("No sound files loaded");
             }
-            catch
+            catch(Exception ex)
             {
                 // Sounds missing, generate them
-                System.Diagnostics.Debug.WriteLine("Warning: Sound files missing. Generating sounds.");
-                _sounds["shoot"] = SoundGenerator.CreateNoise(100);
-                _sounds["move"] = SoundGenerator.CreateTone(100, 500); // Low hum for engine
+                System.Diagnostics.Debug.WriteLine($"Warning: Failed to load sounds: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack: {ex.StackTrace}");
+                System.Diagnostics.Debug.WriteLine("Using procedurally generated sounds...");
+                _sounds["shoot"] = SoundGenerator.CreateNoise(500);
+                _sounds["move"] = SoundGenerator.CreateTone(150, 800);
+                System.Diagnostics.Debug.WriteLine("Generated procedural sounds.");
             }
         }
 
         public void PlaySound(string name)
         {
+            System.Diagnostics.Debug.WriteLine($"PlaySound called: {name}");
             if (_sounds.TryGetValue(name, out var sound))
             {
-                sound.Play();
+                System.Diagnostics.Debug.WriteLine($"  Sound object: {sound}");
+                System.Diagnostics.Debug.WriteLine($"  Sound duration: {sound.Duration}");
+                System.Diagnostics.Debug.WriteLine($"  Playing sound: {name}");
+                try
+                {
+                    sound.Play();
+                    System.Diagnostics.Debug.WriteLine($"  Play() called successfully");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"  ERROR playing sound: {ex.Message}");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"  Sound not found: {name}. Available sounds: {string.Join(", ", _sounds.Keys)}");
             }
         }
 
