@@ -18,6 +18,7 @@ namespace WindsOfWar
         public Vector2 TargetPosition { get; set; }
         public bool IsSelected { get; set; }
         public bool HasMoved { get; set; }
+        public bool IsBailed { get; set; }
         public HashSet<int> FiredWeaponIndices { get; set; } = new HashSet<int>();
         public int SelectedWeaponIndex { get; set; } = 0;
 
@@ -80,6 +81,7 @@ namespace WindsOfWar
         public void Draw(SpriteBatch spriteBatch, Texture2D texture)
         {
             Color color = Team == 1 ? Color.CornflowerBlue : Color.IndianRed;
+            if (IsBailed) color = Color.Yellow; // Bailed
             if (IsSelected) color = Color.LightGreen;
             if (Health <= 0) color = Color.Gray; // Dead
 
@@ -132,8 +134,43 @@ namespace WindsOfWar
             FiredWeaponIndices.Clear();
         }
 
+        public bool Remount()
+        {
+            if (!IsBailed) return true;
+
+            // Simple Skill Check to Remount
+            int roll = Random.Shared.Next(1, 7);
+            if (roll >= UnitData.Skill)
+            {
+                IsBailed = false;
+                return true;
+            }
+            return false;
+        }
+
+        public int GetArmorAgainst(Vector2 shooterPosition)
+        {
+             // Calculate angle to shooter
+             Vector2 direction = shooterPosition - Position;
+             float angleToShooter = MathF.Atan2(direction.Y, direction.X);
+
+             // Normalize angles to -PI to PI
+             float diff = angleToShooter - Facing;
+             while (diff > MathF.PI) diff -= 2 * MathF.PI;
+             while (diff < -MathF.PI) diff += 2 * MathF.PI;
+
+             // Check Front Arc (+/- 45 degrees, i.e., PI/4)
+             if (Math.Abs(diff) <= MathF.PI / 4)
+             {
+                 return UnitData.FrontArmor;
+             }
+             return UnitData.SideArmor;
+        }
+
         public void MoveTo(Vector2 newPosition)
         {
+            if (IsBailed) return;
+
             if (!HasMoved && CanMoveTo(newPosition))
             {
                 TargetPosition = newPosition;
@@ -145,6 +182,7 @@ namespace WindsOfWar
         public string ResolveShooting(Unit target, List<Terrain> terrainList)
         {
             if (Health <= 0) return "Unit is dead.";
+            if (IsBailed) return "Unit is Bailed Out and cannot shoot.";
             if (target.Health <= 0) return "Target is already dead.";
 
             if (FiredWeaponIndices.Contains(SelectedWeaponIndex))
@@ -170,7 +208,6 @@ namespace WindsOfWar
                 }
             }
 
-            Random rand = new Random();
             int hits = 0;
             string log = "";
             if (concealed) log += "(Concealed +1 to Hit) ";
@@ -189,7 +226,7 @@ namespace WindsOfWar
 
             for(int i=0; i<rof; i++)
             {
-                int roll = rand.Next(1, 7);
+                int roll = Random.Shared.Next(1, 7);
                 if (roll >= toHit) hits++;
             }
 
@@ -201,7 +238,6 @@ namespace WindsOfWar
                 if (target.Health <= 0) break;
 
                 bool destroyed = false;
-                bool bailed = false;
 
                 if (target.UnitData.Type == UnitType.Tank)
                 {
@@ -212,13 +248,14 @@ namespace WindsOfWar
                     else
                     {
                         // Tank vs Tank Combat (Equation of War)
-                        int atRoll = rand.Next(1, 7) + weapon.AntiTank;
-                        int armorRoll = rand.Next(1, 7) + target.UnitData.FrontArmor; // Simplified to Front Armor
+                        int atRoll = Random.Shared.Next(1, 7) + weapon.AntiTank;
+                        int targetArmor = target.GetArmorAgainst(Position);
+                        int armorRoll = Random.Shared.Next(1, 7) + targetArmor;
 
                         if (atRoll > armorRoll)
                         {
                             // Penetrated
-                            int fpRoll = rand.Next(1, 7);
+                            int fpRoll = Random.Shared.Next(1, 7);
                             if (fpRoll >= weapon.Firepower)
                             {
                                 destroyed = true;
@@ -226,7 +263,7 @@ namespace WindsOfWar
                             }
                             else
                             {
-                                bailed = true;
+                                target.IsBailed = true;
                                 log += "Penetrated! Bailed! ";
                             }
                         }
@@ -238,7 +275,7 @@ namespace WindsOfWar
                 }
                 else // Infantry
                 {
-                    int saveRoll = rand.Next(1, 7);
+                    int saveRoll = Random.Shared.Next(1, 7);
                     if (saveRoll < target.UnitData.Save)
                     {
                         destroyed = true;

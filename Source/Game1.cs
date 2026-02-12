@@ -96,9 +96,8 @@ namespace WindsOfWar
         {
             // Find a spot in deployment zone
             Rectangle zone = (team == 1) ? _selectedScenario.P1Deployment : _selectedScenario.P2Deployment;
-            Random rand = new Random();
-            int x = rand.Next(zone.X, zone.X + zone.Width);
-            int y = rand.Next(zone.Y, zone.Y + zone.Height);
+            int x = Random.Shared.Next(zone.X, zone.X + zone.Width);
+            int y = Random.Shared.Next(zone.Y, zone.Y + zone.Height);
             SpawnUnit(data, team, new Vector2(x, y));
         }
 
@@ -126,21 +125,79 @@ namespace WindsOfWar
             // Load Sounds
             try
             {
-                _sounds["shoot"] = Content.Load<SoundEffect>("shoot");
-                _sounds["move"] = Content.Load<SoundEffect>("move");
+                System.Diagnostics.Debug.WriteLine("Loading sounds from files...");
+                
+                string shootPath = "Content/tank-shoot.wav";
+                string movePath = "Content/tank-move.wav";
+                
+                System.Diagnostics.Debug.WriteLine($"  Current directory: {Directory.GetCurrentDirectory()}");
+                System.Diagnostics.Debug.WriteLine($"  Looking for: {Path.GetFullPath(shootPath)}");
+                System.Diagnostics.Debug.WriteLine($"  File exists: {File.Exists(shootPath)}");
+                System.Diagnostics.Debug.WriteLine($"  Looking for: {Path.GetFullPath(movePath)}");
+                System.Diagnostics.Debug.WriteLine($"  File exists: {File.Exists(movePath)}");
+                
+                if (File.Exists(shootPath))
+                {
+                    byte[] shootData = File.ReadAllBytes(shootPath);
+                    System.Diagnostics.Debug.WriteLine($"  Read {shootData.Length} bytes from tank-shoot.wav");
+                    
+                    using (var stream = new MemoryStream(shootData))
+                    {
+                        _sounds["shoot"] = SoundEffect.FromStream(stream);
+                        System.Diagnostics.Debug.WriteLine("  Loaded: tank-shoot.wav");
+                    }
+                }
+                
+                if (File.Exists(movePath))
+                {
+                    byte[] moveData = File.ReadAllBytes(movePath);
+                    System.Diagnostics.Debug.WriteLine($"  Read {moveData.Length} bytes from tank-move.wav");
+                    
+                    using (var stream = new MemoryStream(moveData))
+                    {
+                        _sounds["move"] = SoundEffect.FromStream(stream);
+                        System.Diagnostics.Debug.WriteLine("  Loaded: tank-move.wav");
+                    }
+                }
+                
+                if (_sounds.Count > 0)
+                    System.Diagnostics.Debug.WriteLine($"Sounds loaded successfully! Total: {_sounds.Count}");
+                else
+                    throw new Exception("No sound files loaded");
             }
-            catch
+            catch(Exception ex)
             {
-                // Sounds missing, ignore
-                System.Diagnostics.Debug.WriteLine("Warning: Sound files missing.");
+                // Sounds missing, generate them
+                System.Diagnostics.Debug.WriteLine($"Warning: Failed to load sounds: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack: {ex.StackTrace}");
+                System.Diagnostics.Debug.WriteLine("Using procedurally generated sounds...");
+                _sounds["shoot"] = SoundGenerator.CreateNoise(500);
+                _sounds["move"] = SoundGenerator.CreateTone(150, 800);
+                System.Diagnostics.Debug.WriteLine("Generated procedural sounds.");
             }
         }
 
         public void PlaySound(string name)
         {
+            System.Diagnostics.Debug.WriteLine($"PlaySound called: {name}");
             if (_sounds.TryGetValue(name, out var sound))
             {
-                sound.Play();
+                System.Diagnostics.Debug.WriteLine($"  Sound object: {sound}");
+                System.Diagnostics.Debug.WriteLine($"  Sound duration: {sound.Duration}");
+                System.Diagnostics.Debug.WriteLine($"  Playing sound: {name}");
+                try
+                {
+                    sound.Play();
+                    System.Diagnostics.Debug.WriteLine($"  Play() called successfully");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"  ERROR playing sound: {ex.Message}");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"  Sound not found: {name}. Available sounds: {string.Join(", ", _sounds.Keys)}");
             }
         }
 
@@ -162,12 +219,30 @@ namespace WindsOfWar
 
         protected override void Update(GameTime gameTime)
         {
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
-                Exit();
-
             // Handle Input
             var mouseState = Mouse.GetState();
             var keyboardState = Keyboard.GetState();
+
+            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || (keyboardState.IsKeyDown(Keys.Escape) && _previousKeyboardState.IsKeyUp(Keys.Escape)))
+            {
+                if (_currentGameState == GameState.SplashScreen)
+                {
+                    Exit();
+                }
+                else if (_currentGameState == GameState.ScenarioSelect)
+                {
+                    _currentGameState = GameState.SplashScreen;
+                }
+                else if (_currentGameState == GameState.ForceSetup)
+                {
+                    _currentGameState = GameState.ScenarioSelect;
+                }
+                else if (_currentGameState == GameState.Gameplay)
+                {
+                    _currentGameState = GameState.ForceSetup;
+                    _units.Clear(); // Reset units if going back to setup
+                }
+            }
 
             if (_selectedUnit != null && _selectedUnit.Team == _currentTurn)
             {
@@ -348,6 +423,18 @@ namespace WindsOfWar
                     if (unit.Team == _currentTurn)
                     {
                         unit.ResetTurn();
+                        // Try to remount
+                        if (unit.IsBailed)
+                        {
+                            if (unit.Remount())
+                            {
+                                _combatLog = $"{unit.UnitData.Name} Remounted!";
+                            }
+                            else
+                            {
+                                _combatLog = $"{unit.UnitData.Name} Failed to Remount.";
+                            }
+                        }
                     }
                 }
 
