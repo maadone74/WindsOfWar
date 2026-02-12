@@ -126,7 +126,7 @@ namespace WindsOfWar
             try
             {
                 _sounds["shoot"] = Content.Load<SoundEffect>("shoot");
-                _sounds["move"] = Content.Load<SoundEffect>("move");
+                _sounds["move"] = Content.Load<SoundEffect>("tank-move");
             }
             catch
             {
