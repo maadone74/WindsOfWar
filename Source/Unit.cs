@@ -41,6 +41,8 @@ namespace WindsOfWar
 
         public Rectangle Bounds => new Rectangle((int)Position.X - 16, (int)Position.Y - 16, 32, 32);
 
+        public float Facing { get; set; }
+
         public Unit(UnitData data, int team, Vector2 position)
         {
             UnitData = data;
@@ -48,6 +50,7 @@ namespace WindsOfWar
             Position = position;
             TargetPosition = position;
             Health = data.Health;
+            Facing = Team == 2 ? MathF.PI : 0f;
         }
 
         private bool _isDead = false;
@@ -59,6 +62,7 @@ namespace WindsOfWar
             if (Vector2.Distance(Position, TargetPosition) > 2)
             {
                 Vector2 direction = Vector2.Normalize(TargetPosition - Position);
+                Facing = MathF.Atan2(direction.Y, direction.X);
                 float visualSpeed = 150f;
                 Position += direction * visualSpeed * dt;
 
@@ -84,12 +88,11 @@ namespace WindsOfWar
                 Rectangle rect = new Rectangle((int)Position.X - 16, (int)Position.Y - 16, 32, 32);
                 spriteBatch.Draw(texture, rect, color);
 
-                Rectangle turret = new Rectangle((int)Position.X - 8, (int)Position.Y - 8, 16, 16);
-                spriteBatch.Draw(texture, turret, Color.DarkGray);
+                // Turret (Rotated)
+                spriteBatch.Draw(texture, Position, null, Color.DarkGray, Facing, new Vector2(0.5f, 0.5f), new Vector2(16, 16), SpriteEffects.None, 0f);
 
-                Rectangle barrel = new Rectangle((int)Position.X, (int)Position.Y - 2, 24, 4);
-                if (Team == 2) barrel.X -= 24;
-                spriteBatch.Draw(texture, barrel, Color.Black);
+                // Barrel (Rotated)
+                spriteBatch.Draw(texture, Position, null, Color.Black, Facing, new Vector2(0f, 0.5f), new Vector2(24, 4), SpriteEffects.None, 0f);
             }
             else
             {
@@ -174,6 +177,11 @@ namespace WindsOfWar
 
             // Mark as shot
             FiredWeaponIndices.Add(SelectedWeaponIndex);
+
+            // Update Facing to target
+            Vector2 direction = target.Position - Position;
+            Facing = MathF.Atan2(direction.Y, direction.X);
+
             OnSoundTriggered?.Invoke("shoot");
 
             int toHit = UnitData.Skill;
