@@ -96,9 +96,8 @@ namespace WindsOfWar
         {
             // Find a spot in deployment zone
             Rectangle zone = (team == 1) ? _selectedScenario.P1Deployment : _selectedScenario.P2Deployment;
-            Random rand = new Random();
-            int x = rand.Next(zone.X, zone.X + zone.Width);
-            int y = rand.Next(zone.Y, zone.Y + zone.Height);
+            int x = Random.Shared.Next(zone.X, zone.X + zone.Width);
+            int y = Random.Shared.Next(zone.Y, zone.Y + zone.Height);
             SpawnUnit(data, team, new Vector2(x, y));
         }
 
@@ -131,8 +130,10 @@ namespace WindsOfWar
             }
             catch
             {
-                // Sounds missing, ignore
-                System.Diagnostics.Debug.WriteLine("Warning: Sound files missing.");
+                // Sounds missing, generate them
+                System.Diagnostics.Debug.WriteLine("Warning: Sound files missing. Generating sounds.");
+                _sounds["shoot"] = SoundGenerator.CreateNoise(100);
+                _sounds["move"] = SoundGenerator.CreateTone(100, 500); // Low hum for engine
             }
         }
 
@@ -162,12 +163,30 @@ namespace WindsOfWar
 
         protected override void Update(GameTime gameTime)
         {
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
-                Exit();
-
             // Handle Input
             var mouseState = Mouse.GetState();
             var keyboardState = Keyboard.GetState();
+
+            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || (keyboardState.IsKeyDown(Keys.Escape) && _previousKeyboardState.IsKeyUp(Keys.Escape)))
+            {
+                if (_currentGameState == GameState.SplashScreen)
+                {
+                    Exit();
+                }
+                else if (_currentGameState == GameState.ScenarioSelect)
+                {
+                    _currentGameState = GameState.SplashScreen;
+                }
+                else if (_currentGameState == GameState.ForceSetup)
+                {
+                    _currentGameState = GameState.ScenarioSelect;
+                }
+                else if (_currentGameState == GameState.Gameplay)
+                {
+                    _currentGameState = GameState.ForceSetup;
+                    _units.Clear(); // Reset units if going back to setup
+                }
+            }
 
             if (_selectedUnit != null && _selectedUnit.Team == _currentTurn)
             {
@@ -348,6 +367,18 @@ namespace WindsOfWar
                     if (unit.Team == _currentTurn)
                     {
                         unit.ResetTurn();
+                        // Try to remount
+                        if (unit.IsBailed)
+                        {
+                            if (unit.Remount())
+                            {
+                                _combatLog = $"{unit.UnitData.Name} Remounted!";
+                            }
+                            else
+                            {
+                                _combatLog = $"{unit.UnitData.Name} Failed to Remount.";
+                            }
+                        }
                     }
                 }
 
