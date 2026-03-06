@@ -6,6 +6,7 @@ namespace WindsOfWar
     {
         Infantry,
         Tank,
+        TankDestroyer,
         Gun
     }
 
@@ -29,5 +30,8 @@ namespace WindsOfWar
         public int FrontArmor { get; set; } = 0;
         public int SideArmor { get; set; } = 0;
         public int TopArmor { get; set; } = 0;
+
+        // Flames of War: points for list building (e.g. 100pt game)
+        public int Points { get; set; } = 5;
     }
 }
